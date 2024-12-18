@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="de">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link
+            href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+            rel="stylesheet"
+            integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+            crossorigin="anonymous"
+        />
+
+        <title>Image View and Upload</title>
+    </head>
+
+    <body class="col-md-6 p-2" style="min-width: 350px">
+        <div class="d-flex flex-column gap-1">
+            <h3>Upload</h3>
+            <div class="d-flex w-auto">
+                <input class="form-control" type="file" id="fileInput" multiple />
+            </div>
+            <div class="d-flex w-auto gap-1">
+                <input class="form-control" type="text" id="reference" placeholder="Referenz Nummer" />
+                <button class="btn btn-outline-primary" onclick="clickOnDate()">Date</button>
+                <button class="btn btn-outline-primary" onclick="clickOnRandom()">Random</button>
+            </div>
+            <button class="btn btn-primary" id="uploadButton">Hochladen</button>
+            <p class="fs-4 rounded px-1 font-monospace"><span>Status:</span> <span id="status"></span></p>
+        </div>
+        <div class="d-flex flex-column gap-1">
+            <div class="d-flex">
+                <h3>View</h3>
+                <div class="d-flex w-100 justify-content-end">
+                    <button class="btn btn-outline-dark" onclick="getBlops()">Load new files</button>
+                </div>
+            </div>
+            <div id="images">
+                <div class="accordion" id="references"></div>
+            </div>
+        </div>
+        <div id="image-modal" class="visually-hidden position-absolute d-flex flex-column top-0 start-0 end-0 bottom-0">
+            <img id="modal-image" src="" alt="Großes Bild" />
+        </div>
+        <script>
+            const storageUrl = "###URL###/images/upload";
+            const listUrl200 = "###URL###/images";
+            const listUrl800 = "###URL###/images";
+            const listUrl1024 = "###URL###/images";
+            const sasToken = "###SAS###";
+
+            let update = false;
+            let blobList = [];
+            let imageList = [];
+            let referenceList = [];
+
+            async function getBlops() {
+                const response = await fetch(`${listUrl200}?${sasToken}&restype=container&comp=list`);
+                const data = await response.text();
+
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(data, "application/xml");
+                const blobs = xmlDoc.getElementsByTagName("Blob");
+                for (const blob of blobs) {
+                    const blobName = blob.getElementsByTagName("Name")[0].textContent;
+                    if (!blobName.includes("images-resize-200/")) continue;
+                    if (!blobList.includes(blobName)) blobList.push(blobName);
+                }
+                await checkForNewBlobs();
+            }
+            async function checkForNewBlobs() {
+                blobList.forEach(async (blobName) => {
+                    if (!imageList.includes(blobName)) {
+                        imageList.push(blobName);
+                        await addImageToContainer(blobName);
+                    }
+                });
+            }
+            async function addImageToContainer(blobName) {
+                // <div class="accordion-item">
+                //     <h2 class="accordion-header">
+                //         <button
+                //             type="button"
+                //             data-bs-toggle="collapse"
+                //             data-bs-target="#---collapseOne---"
+                //             aria-expanded="true"
+                //             aria-controls="---collapseOne---"
+                //             class="accordion-button"
+                //         >
+                //             ###acc:referenz###
+                //         </button>
+                //     </h2>
+                //     <div id="---collapseOne---" class="accordion-collapse collapse" data-bs-parent="references">
+                //         <div class="accordion-body">###acc:body###</div>
+                //     </div>
+                // </div>;
+                // blobName = images-resize-200/353797/1734259404652_IMG_6303.jpg
+                const imageSize = blobName.split("/")[0];
+                const referenz = blobName.split("/")[1];
+                const imageName = blobName.split("/")[2];
+                if (!referenceList.includes(referenz)) {
+                    referenceList.push(referenz);
+                    const accordionItem = document.createElement("div");
+                    const h2 = document.createElement("h2");
+                    const button = document.createElement("button");
+                    const divCollapse = document.createElement("div");
+                    const divBody = document.createElement("div");
+
+                    accordionItem.classList.add("accordion-item");
+                    h2.classList.add("accordion-header");
+                    button.classList.add("accordion-button");
+                    button.type = "button";
+                    button.dataset.bsToggle = "collapse";
+                    button.dataset.bsTarget = `#${referenz}`;
+                    button.ariaExpanded = "true";
+                    button.ariaControls = referenz;
+                    button.textContent = referenz;
+
+                    divCollapse.id = referenz;
+                    divCollapse.classList.add("accordion-collapse", "collapse");
+                    divCollapse.dataset.bsParent = "references";
+
+                    divBody.classList.add("accordion-body");
+                    divBody.id = "ref" + referenz;
+
+                    divCollapse.appendChild(divBody);
+                    h2.appendChild(button);
+                    accordionItem.appendChild(h2);
+                    accordionItem.appendChild(divCollapse);
+
+                    const collapseContainer = document.getElementById("references");
+                    collapseContainer.appendChild(accordionItem);
+                }
+                const accordionItem = document.createElement("div");
+                const h2 = document.createElement("h2");
+                const button = document.createElement("button");
+                const divCollapse = document.createElement("div");
+                const divBody = document.createElement("div");
+
+                const imagesContainer = document.getElementById("ref" + referenz);
+                const img = document.createElement("img");
+
+                img.alt = blobName;
+                img.src = `${listUrl200}/${blobName}?${sasToken}`;
+                img.data;
+                img.classList.add("object-contain");
+                img.setAttribute("data-large-src", `${listUrl1024}/${blobName.replace("images-resize-200/", "images-resize-1024/")}?${sasToken}`);
+                img.addEventListener("click", () => {
+                    const modalImage = document.getElementById("modal-image");
+                    modalImage.src = img.getAttribute("data-large-src");
+
+                    const modal = document.getElementById("image-modal");
+                    modal.classList.remove("visually-hidden");
+                });
+                imagesContainer.appendChild(img);
+                update = false;
+            }
+
+            getBlops();
+            document.getElementById("image-modal").addEventListener("click", () => {
+                const modal = document.getElementById("image-modal");
+                modal.classList.add("visually-hidden");
+            });
+            const spinnerChars = ["|", "/", "-", "\\"];
+            let spinnerIndex = 0;
+            let spinnerInterval = null;
+
+            function startSpinner() {
+                const statusEl = document.getElementById("status");
+                spinnerInterval = setInterval(() => {
+                    spinnerIndex = (spinnerIndex + 1) % spinnerChars.length;
+                    // Der eigentliche Status-Text wird außerhalb aktualisiert,
+                    // hier aktualisieren wir nur den Spinner.
+                    const currentText = statusEl.textContent;
+                    // Wir suchen den letzten Index des Spinners im Text und ersetzen ihn.
+                    // Wenn Sie den Spinner separat halten wollen, trennen Sie bitte Status und Spinner-Anzeige.
+                    // Hier vereinfachen wir: Der gesamte Text wird jedes Mal neu gesetzt.
+                    if (currentText.includes("...")) {
+                        const parts = currentText.split("...");
+                        statusEl.textContent = parts[0] + "... " + spinnerChars[spinnerIndex];
+                    } else {
+                        // Falls kein ... gefunden wird, fügen wir es hinzu.
+                        statusEl.textContent = currentText + " ... " + spinnerChars[spinnerIndex];
+                    }
+                }, 200);
+            }
+
+            function stopSpinner() {
+                if (spinnerInterval) {
+                    clearInterval(spinnerInterval);
+                    spinnerInterval = null;
+                    spinnerIndex = 0;
+                }
+            }
+
+            clickOnDate = () => {
+                const date = new Date();
+                const dateString = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}_${date.getHours()}-${date.getMinutes()}`;
+                document.getElementById("reference").value = dateString;
+            };
+
+            clickOnRandom = () => {
+                const random = Math.floor(Math.random() * 1000000);
+                document.getElementById("reference").value = random;
+            };
+
+            document.getElementById("uploadButton").addEventListener("click", async () => {
+                const fileInput = document.getElementById("fileInput");
+                const files = fileInput.files;
+
+                if (!files || files.length === 0) {
+                    alert("Bitte wählen Sie mindestens eine Datei aus.");
+                    return;
+                }
+
+                document.getElementById("status").textContent = `Starte Upload von ${files.length} Datei(en)`;
+                startSpinner();
+
+                let allOk = true;
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    document.getElementById("status").textContent = `Lade Datei ${i + 1} von ${files.length} hoch...`;
+
+                    const timestamp = Date.now();
+                    const reference = document.getElementById("reference").value;
+
+                    const blobUrl = `${storageUrl}/${reference}/${timestamp}_${file.name}?${sasToken}`;
+
+                    try {
+                        const response = await fetch(blobUrl, {
+                            method: "PUT",
+                            headers: {
+                                "x-ms-blob-type": "BlockBlob",
+                            },
+                            body: file,
+                        });
+
+                        if (!response.ok) {
+                            allOk = false;
+                            break;
+                        }
+                    } catch (error) {
+                        console.error("Fehler beim Upload:", error);
+                        allOk = false;
+                        break;
+                    }
+                }
+
+                stopSpinner();
+                if (allOk) {
+                    document.getElementById("status").textContent = "Alle Dateien wurden erfolgreich hochgeladen!";
+                    update = true;
+                    const interval = setInterval(async () => {
+                        await getBlops();
+                        console.log("update", update);
+                        if (!update) {
+                            clearInterval(interval);
+                        }
+                    }, 3000);
+                    setTimeout(() => {
+                        document.getElementById("status").textContent = "";
+                    }, 3000);
+                } else {
+                    document.getElementById("status").textContent = "Fehler beim Hochladen einer oder mehrerer Dateien.";
+                }
+            });
+        </script>
+        <script
+            src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.min.js"
+            integrity="sha384-0pUGZvbkm6XF6gxjEnlmuGrJXVbNuzT9qBBavbLwCsOGabYfZo0T0to5eqruptLy"
+            crossorigin="anonymous"
+        ></script>
+    </body>
+</html>
